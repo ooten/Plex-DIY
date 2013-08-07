@@ -1,0 +1,76 @@
+RE_AMPERSAND = Regex('&(?!amp;)')
+
+####################################################################################################
+def NormalizeURL(url):
+
+	return url
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	xml = GetXML(url)
+
+	show = xml.xpath('./showName')[0].text
+	title = xml.xpath('./clipName')[0].text
+	summary = xml.xpath('./abstract')[0].text
+	thumb = xml.xpath('./thumbnailUrl')[0].text.replace('_92x69.jpg', '_480x360.jpg')
+	duration = Datetime.MillisecondsFromString(xml.xpath('./length')[0].text)
+
+	return EpisodeObject(
+		show = show,
+		title = title,
+		summary = summary,
+		duration = duration,
+		thumb = Resource.ContentsOfURLWithFallback(url=thumb)
+	)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	xml = GetXML(url)
+	url = xml.xpath('./videoUrl')[0].text.replace('http://wms','rtmp://flash').replace('.wmv','').replace('scrippsnetworks.com/','scrippsnetworks.com/ondemand/&').split('&')
+
+	return [
+		MediaObject(
+			video_resolution = '480',
+			audio_channels = 2,
+			parts = [
+				PartObject(
+					key = RTMPVideoURL(url=url[0], clip=url[1])
+				)
+			]
+		)
+	]
+
+####################################################################################################
+def GetXML(url):
+
+	video_id = url.split('videoId=')[1].split('&')[0]
+	show_id = url.split('showId=')[1]
+
+	# NB: must do it this way as the first line of their xml is a carriage return (which makes it invalid)
+	xml = HTTP.Request('http://www.diynetwork.com/diy/channel/xml/0,,%s,00.xml' % show_id).content.strip()
+	xml = RE_AMPERSAND.sub('&amp;', xml)
+	xml = XML.ElementFromString(xml).xpath('//video/videoId[text()="%s"]/parent::video' % video_id)
+
+	if len(xml) < 1:
+		raise Ex.MediaNotAvailable
+
+	return xml[0]
+
+####################################################################################################
+def TestURLs():
+
+	# due to the nature of pulling these here are just some random static ones
+	# hopefully these shows will stay around for the tester to work :/
+	test_urls = []
+
+	test_urls.append('http://www.hgtv.com/video/?videoId=94162&showId=56323')
+	test_urls.append('http://www.hgtv.com/video/?videoId=46236&showId=32481')
+	test_urls.append('http://www.hgtv.com/video/?videoId=85581&showId=42421')
+	test_urls.append('http://www.hgtv.com/video/?videoId=39781&showId=21121')
+	test_urls.append('http://www.hgtv.com/video/?videoId=57984&showId=36706')
+	test_urls.append('http://www.hgtv.com/video/?videoId=54305&showId=12423')
+	test_urls.append('http://www.hgtv.com/video/?videoId=98041&showId=64962')
+
+	return test_urls
